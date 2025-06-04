@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal, get_args
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -28,10 +29,23 @@ def get_file_path(file_name: str, date: str, processed=False):
     return date_dir_path / RAW_DATA_DIR / file_name
 
 
-def pre_process(raw_file_path: Path):
+def preprocess(
+    raw_file_path: Path,
+    source: Literal["ioc", "itools"]
+) -> pd.DataFrame:
+
+    if source == "ioc":
+        return  preprocess_ioc(raw_file_path)
+
+    if source  == "itools":
+        return preprocess_itools(raw_file_path)
+    
+    raise KeyError()
+
+
+def preprocess_ioc(raw_file_path: Path):
 
     df = pd.read_csv(raw_file_path, sep=" ", header=None)
-
     df["datetime"] = pd.to_datetime(df[1].astype(str) + " " + df[2].astype(str))
     df = df.rename(columns={0: "variable", 3: "temperature"})
     df.temperature = pd.to_numeric(df.temperature)
@@ -46,50 +60,55 @@ def pre_process(raw_file_path: Path):
     return df.sort_values('datetime')
 
 
+def fix_itools_concat(itools_df: pd.DataFrame):
+    concats = []
+    header_loc = itools_df[itools_df['Date/Time'] == 'Date/Time'].index
+
+    for i, j in enumerate(header_loc):
+        rename = {'Timestamp': ['Timestamp1', 'Timestamp2']}
+
+        try:
+            aux_df = itools_df[j+1: header_loc[i+1]-1]
+        except IndexError:
+            aux_df = itools_df[j+1:]
+        
+        aux_df.columns = itools_df.iloc[j].values.tolist()
+        aux_df = aux_df.rename(columns=lambda c: rename[c].pop(0) if c in rename.keys() else c)
+        concats.append(aux_df.reset_index())
+
+    rename = {'Timestamp': ['Timestamp1', 'Timestamp2']}
+    itools_df = aux_df.rename(columns=lambda c: rename[c].pop(0) if c in rename.keys() else c)
+    itools_df = itools_df[:header_loc[0]].reset_index()
+    concats.append(itools_df)
+    return pd.concat(concats, ignore_index=True).drop(['Date/Time'], axis=1)
+
+
+def adjust_itools_columns(itools_df: pd.DataFrame):
+    concats_2 = []
+    for i, col in enumerate(itools_df.columns):
+
+        if "Loop.1" in col:
+            aux_df = itools_df[[col, itools_df.columns[i+1]]]
+            aux_df.columns = ["temperature", "datetime"]
+            aux_df["variable"] = col
+            concats_2.append(aux_df.reset_index())
+
+    return pd.concat(concats_2, ignore_index=True).drop(["index"], axis=1)
+
+
 def preprocess_itools(raw_file_path: Path):
     df = pd.read_csv(
         raw_file_path, sep=";"
     ).drop(['Quality', 'Quality.1'], axis=1)
 
-    concats = []
-    header_loc = df[df['Date/Time'] == 'Date/Time'].index
-    
-    for i, j in enumerate(header_loc):
-        rename = {'Timestamp': ['Timestamp1', 'Timestamp2']}
-
-        try:
-            aux_df = df[j+1: header_loc[i+1]-1]
-        except IndexError:
-            aux_df = df[j+1:]
-        
-        aux_df.columns = df.iloc[j].values.tolist()
-        aux_df = aux_df.rename(columns=lambda c: rename[c].pop(0) if c in rename.keys() else c)
-        concats.append(aux_df.reset_index())
-
-    rename = {'Timestamp': ['Timestamp1', 'Timestamp2']}
-    df = aux_df.rename(columns=lambda c: rename[c].pop(0) if c in rename.keys() else c)
-    df = df[:header_loc[0]].reset_index()
-    concats.append(df)
-    df = pd.concat(concats, ignore_index=True).drop(['Date/Time'], axis=1)
-
-
-    concats_2 = []
-    for i, col in enumerate(df.columns):
-
-        if "Loop.1" in col:
-            aux_df = df[[col, df.columns[i+1]]]
-            aux_df.columns = ["temperature", "datetime"]
-            aux_df["variable"] = col
-            concats_2.append(aux_df.reset_index())
-
-    df = pd.concat(concats_2, ignore_index=True).drop(["index"], axis=1)
+    df = fix_itools_concat(df)
+    df = adjust_itools_columns(df)
 
     df.temperature = pd.to_numeric(df.temperature.str.replace(',', '.'))
     df.variable = df.variable.astype("category")
     df.datetime = pd.to_datetime(df.datetime)
 
     return df.sort_values("datetime")
-
 
 
 def simple_curve_plot(df, x_lim, y_lim, skip_variable: str = "", show: bool = True):
@@ -149,8 +168,8 @@ def get_plot_limits(df):
 
 if __name__ == "__main__":
 
-    raw_file_path = get_file_path("20250602.csv", "20250602")
-    sensor_df = preprocess_itools(raw_file_path)
+    raw_file_path = get_file_path("20250603.csv", "20250603")
+    sensor_df = preprocess(raw_file_path, "itools")
 
     sensor_df["elapsed_seconds"] =(
         sensor_df.datetime-sensor_df.datetime.min()
@@ -159,6 +178,4 @@ if __name__ == "__main__":
     fig, ax = simple_curve_plot(
         sensor_df, x_lim, y_lim, show=True,
     )
-    
-
 
