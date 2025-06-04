@@ -35,12 +35,18 @@ def preprocess(
 ) -> pd.DataFrame:
 
     if source == "ioc":
-        return  preprocess_ioc(raw_file_path)
+        df = preprocess_ioc(raw_file_path)
 
-    if source  == "itools":
-        return preprocess_itools(raw_file_path)
+    elif source  == "itools":
+        df = preprocess_itools(raw_file_path)
     
-    raise KeyError()
+    else:
+        raise KeyError("source %s is invalid" % source)
+
+    df.temperature = pd.to_numeric(df.temperature)
+    df.variable = df.variable.astype("category")
+    df.datetime = pd.to_datetime(df.datetime)
+    return df.sort_values("datetime")
 
 
 def preprocess_ioc(raw_file_path: Path):
@@ -48,8 +54,6 @@ def preprocess_ioc(raw_file_path: Path):
     df = pd.read_csv(raw_file_path, sep=" ", header=None)
     df["datetime"] = pd.to_datetime(df[1].astype(str) + " " + df[2].astype(str))
     df = df.rename(columns={0: "variable", 3: "temperature"})
-    df.temperature = pd.to_numeric(df.temperature)
-    df.variable = df.variable.astype("category")
 
     df = df.drop([1,2], axis=1)
     if 4 in df.columns:
@@ -57,7 +61,7 @@ def preprocess_ioc(raw_file_path: Path):
     if 5 in df.columns:
         df = df.drop([5], axis=1)
 
-    return df.sort_values('datetime')
+    return df
 
 
 def fix_itools_concat(itools_df: pd.DataFrame):
@@ -103,12 +107,9 @@ def preprocess_itools(raw_file_path: Path):
 
     df = fix_itools_concat(df)
     df = adjust_itools_columns(df)
+    df.temperature = df.temperature.str.replace(',', '.')
 
-    df.temperature = pd.to_numeric(df.temperature.str.replace(',', '.'))
-    df.variable = df.variable.astype("category")
-    df.datetime = pd.to_datetime(df.datetime)
-
-    return df.sort_values("datetime")
+    return df
 
 
 def simple_curve_plot(df, x_lim, y_lim, skip_variable: str = "", show: bool = True):
@@ -168,8 +169,8 @@ def get_plot_limits(df):
 
 if __name__ == "__main__":
 
-    raw_file_path = get_file_path("20250603.csv", "20250603")
-    sensor_df = preprocess(raw_file_path, "itools")
+    raw_file_path = get_file_path("sensors_20250529.txt", "20250529")
+    sensor_df = preprocess(raw_file_path, "ioc")
 
     sensor_df["elapsed_seconds"] =(
         sensor_df.datetime-sensor_df.datetime.min()
