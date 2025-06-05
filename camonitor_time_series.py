@@ -176,17 +176,3 @@ def get_plot_limits(df):
         np.round(df.temperature.max(), 0)+1
     )
 
-
-if __name__ == "__main__":
-
-    raw_file_path = get_file_path("sensors_20250529.txt", "20250529")
-    sensor_df = preprocess(raw_file_path, "ioc")
-
-    sensor_df["elapsed_seconds"] =(
-        sensor_df.datetime-sensor_df.datetime.min()
-    ).apply(lambda delta: delta.total_seconds())
-    x_lim, y_lim = get_plot_limits(sensor_df)
-    fig, ax = simple_curve_plot(
-        sensor_df, x_lim, y_lim, show=True,
-    )
-
