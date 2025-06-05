@@ -10,6 +10,8 @@ RAW_DATA_DIR = "raw"
 PROC_DATA_DIR = "processed"
 
 COLOR = {
+    "process_value": "C2",
+    "working_set_point": "C1",
     "QUA:B:EU3508:LOOP1:WSP:RBV": "C1",
     "QUA:B:EU3508:LOOP1:PV:RBV": "C2",
     "QUA:F:EPS01:TermoparBlower": "C3",
@@ -46,6 +48,7 @@ def preprocess(
     df.temperature = pd.to_numeric(df.temperature)
     df.variable = df.variable.astype("category")
     df.datetime = pd.to_datetime(df.datetime)
+
     return df.sort_values("datetime")
 
 
@@ -94,7 +97,14 @@ def adjust_itools_columns(itools_df: pd.DataFrame):
         if "Loop.1" in col:
             aux_df = itools_df[[col, itools_df.columns[i+1]]]
             aux_df.columns = ["temperature", "datetime"]
-            aux_df["variable"] = col
+
+            if "WorkingSP" in col:
+                aux_df["variable"] = "working_set_point"
+            elif "PV" in col:
+                aux_df["variable"] = "process_value"
+            else:
+                raise KeyError()
+                        
             concats_2.append(aux_df.reset_index())
 
     return pd.concat(concats_2, ignore_index=True).drop(["index"], axis=1)
@@ -121,7 +131,7 @@ def simple_curve_plot(df, x_lim, y_lim, skip_variable: str = "", show: bool = Tr
         if variable == skip_variable:
             continue
 
-        for key in COLOR.keys():
+        for key in COLOR:
             if key in variable:
                 break
 
