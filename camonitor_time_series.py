@@ -47,7 +47,6 @@ def preprocess(
 
     df.temperature = pd.to_numeric(df.temperature)
     df.variable = df.variable.astype("category")
-    df.datetime = pd.to_datetime(df.datetime)
 
     return df.sort_values("datetime")
 
@@ -63,6 +62,8 @@ def preprocess_ioc(raw_file_path: Path):
         df = df.drop([4], axis=1)
     if 5 in df.columns:
         df = df.drop([5], axis=1)
+
+    df.datetime = pd.to_datetime(df.datetime, format="%Y-%m-%d %H:%M:%S.%f")
 
     return df
 
@@ -118,6 +119,8 @@ def preprocess_itools(raw_file_path: Path):
     df = fix_itools_concat(df)
     df = adjust_itools_columns(df)
     df.temperature = df.temperature.str.replace(',', '.')
+
+    df.datetime = pd.to_datetime(df.datetime, format="%d/%m/%Y %H:%M:%S")
 
     return df
 
